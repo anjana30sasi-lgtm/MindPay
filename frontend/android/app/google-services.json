@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "301165609239",
+    "project_id": "mindpay-68a69",
+    "storage_bucket": "mindpay-68a69.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:301165609239:android:efcc887ecfb807c114f752",
+        "android_client_info": {
+          "package_name": "com.example.mindpay_frontend"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCqCnBiNZjJKbiaJgAATQdPxiBQ1T3zkfM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
