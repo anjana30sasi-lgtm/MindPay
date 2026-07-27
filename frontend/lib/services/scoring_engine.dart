@@ -1,4 +1,4 @@
-import '../models/mind_transaction.dart';
+import '../models/transaction.dart';
 
 class ScoringEngine {
   static const double largeTransactionLimit = 5000;

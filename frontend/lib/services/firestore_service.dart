@@ -1,33 +1,46 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/transaction.dart';
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // Add a transaction
-  Future<void> addTransaction({
-    required String userId,
-    required String merchant,
-    required String category,
-    required int amount,
-    required String paymentMethod,
-  }) async {
-    await _firestore.collection('transactions').add({
-      'userId': userId,
-      'merchant': merchant,
-      'category': category,
-      'amount': amount,
-      'paymentMethod': paymentMethod,
-      'timestamp': FieldValue.serverTimestamp(),
+  Future<void> addTransaction(MindTransaction transaction) async {
+    await _firestore.collection('transactions').doc(transaction.id).set({
+      'userId': transaction.userId,
+      'merchant': transaction.merchant,
+      'category': transaction.category,
+      'amount': transaction.amount,
+      'time': transaction.time,
+      'wasPaused': transaction.wasPaused,
+      'wasCancelled': transaction.wasCancelled,
+      'reasonTag': transaction.reasonTag,
     });
   }
 
   // Get all transactions of a user
-  Stream<QuerySnapshot> getTransactions(String userId) {
-    return _firestore
+  Future<List<MindTransaction>> getTransactions(String userId) async {
+    QuerySnapshot snapshot = await _firestore
         .collection('transactions')
         .where('userId', isEqualTo: userId)
-        .orderBy('timestamp', descending: true)
-        .snapshots();
+        .orderBy('time', descending: true)
+        .get();
+
+    return snapshot.docs.map((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+
+      return MindTransaction(
+        id: doc.id,
+        userId: data['userId'],
+        merchant: data['merchant'],
+        category: data['category'],
+        amount: (data['amount'] as num).toDouble(),
+        time: (data['time'] as Timestamp).toDate(),
+        wasPaused: data['wasPaused'] ?? false,
+        wasCancelled: data['wasCancelled'] ?? false,
+        reasonTag: data['reasonTag'],
+      );
+    }).toList();
   }
 
   // Add an alert
@@ -61,5 +74,18 @@ class FirestoreService {
     await _firestore.collection('alerts').doc(alertId).update({
       'isRead': true,
     });
+  }
+
+  // Delete a transaction
+  Future<void> deleteTransaction(String transactionId) async {
+    await _firestore
+        .collection('transactions')
+        .doc(transactionId)
+        .delete();
+  }
+
+  // Delete an alert
+  Future<void> deleteAlert(String alertId) async {
+    await _firestore.collection('alerts').doc(alertId).delete();
   }
 }
