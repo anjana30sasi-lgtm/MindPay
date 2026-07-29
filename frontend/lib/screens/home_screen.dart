@@ -3,8 +3,10 @@ import '../theme.dart';
 import '../models/transaction.dart';
 import '../services/mock_data_service.dart';
 import '../services/scoring_engine.dart';
+import '../services/user_preferences_service.dart';
 import '../widgets/pause_dialog.dart';
 import 'weekly_summary_screen.dart';
+import 'welcome_screen.dart';
 
 /// Demo personas — lets you show the same transaction triggering a pause
 /// for one income tier and not another, live, in front of the mentor.
@@ -32,11 +34,24 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<MindTransaction> _log = [];
   int _skippedCount = 0;
   double _skippedAmount = 0;
+  Map<String, String>? _profile;
 
   @override
   void initState() {
     super.initState();
     _loadPersona();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    final profile = await UserPreferencesService.getProfile();
+    if (mounted) setState(() => _profile = profile);
+  }
+
+  Future<void> _replayOnboarding() async {
+    await UserPreferencesService.resetOnboarding();
+    if (!mounted) return;
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const WelcomeScreen()));
   }
 
   void _loadPersona() {
@@ -110,9 +125,33 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('MindPay', style: Theme.of(context).textTheme.headlineLarge),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('MindPay', style: Theme.of(context).textTheme.headlineLarge),
+                  IconButton(
+                    tooltip: 'Replay onboarding (demo)',
+                    icon: const Icon(Icons.replay, color: MindColors.inkSoft, size: 20),
+                    onPressed: _replayOnboarding,
+                  ),
+                ],
+              ),
               Text('Conscious spending, one pause at a time.',
                   style: Theme.of(context).textTheme.bodyMedium),
+              if (_profile != null && _profile!['incomeRange'] != 'Not set') ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: MindColors.forest.withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    'Personalized for: ${_profile!['incomeRange']} · ${_profile!['spendingStyle']} · watching ${_profile!['mainTemptation']} closely',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 12),
+                  ),
+                ),
+              ],
               const SizedBox(height: 20),
 
               // Persona switcher — the "different income levels" demo moment
