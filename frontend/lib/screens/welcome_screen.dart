@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../widgets/mindpay_logo.dart';
-import 'onboarding_questions_screen.dart';
+import 'login_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -18,8 +18,11 @@ class WelcomeScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const Spacer(flex: 3),
+
               const MindPayLogo(size: 88),
+
               const SizedBox(height: 28),
+
               Text(
                 'MindPay',
                 style: Theme.of(context).textTheme.headlineLarge?.copyWith(
@@ -27,7 +30,9 @@ class WelcomeScreen extends StatelessWidget {
                       fontSize: 40,
                     ),
               ),
+
               const SizedBox(height: 10),
+
               Text(
                 'Conscious spending, one pause at a time.',
                 textAlign: TextAlign.center,
@@ -36,7 +41,9 @@ class WelcomeScreen extends StatelessWidget {
                       fontSize: 16,
                     ),
               ),
+
               const Spacer(flex: 4),
+
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -44,17 +51,25 @@ class WelcomeScreen extends StatelessWidget {
                     backgroundColor: MindColors.pauseAmber,
                     foregroundColor: MindColors.ink,
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
                   onPressed: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const OnboardingQuestionsScreen()),
+                      MaterialPageRoute(
+                        builder: (_) => const LoginScreen(),
+                      ),
                     );
                   },
-                  child: const Text('Get Started', style: TextStyle(fontWeight: FontWeight.w700)),
+                  child: const Text(
+                    'Get Started',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
                 ),
               ),
+
               const SizedBox(height: 40),
             ],
           ),
