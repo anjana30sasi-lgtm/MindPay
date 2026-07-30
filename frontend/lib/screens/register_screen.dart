@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import '../services/auth_service.dart';
 import '../theme.dart';
 import '../widgets/mindpay_logo.dart';
 import '../services/user_preferences_service.dart';
@@ -19,7 +19,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _confirmPasswordController = TextEditingController();
   final _monthlyBudgetController = TextEditingController();
   final _dailyLimitController = TextEditingController();
-
+  final AuthService _authService = AuthService();
   bool _hidePassword = true;
   bool _hideConfirm = true;
 
@@ -61,16 +61,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
     // Temporary local login.
     // Later replace with your teammate's backend API.
 
-    await UserPreferencesService.login(
-  userId: "", // Backend will provide this later
+    
+    final user = await _authService.signUp(
   name: _nameController.text.trim(),
   email: _emailController.text.trim(),
+  password: _passwordController.text,
   monthlyBudget:
-      double.tryParse(_monthlyBudgetController.text) ?? 0,
+      int.tryParse(_monthlyBudgetController.text) ?? 0,
   dailyLimit:
-      double.tryParse(_dailyLimitController.text) ?? 0,
+      int.tryParse(_dailyLimitController.text) ?? 0,
 );
 
+if (user == null) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text("Registration failed")),
+  );
+  return;
+}
     if (!mounted) return;
 
     Navigator.pushReplacement(

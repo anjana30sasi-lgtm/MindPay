@@ -7,7 +7,9 @@ import '../services/user_preferences_service.dart';
 import '../widgets/pause_dialog.dart';
 import 'weekly_summary_screen.dart';
 import 'welcome_screen.dart';
-
+import '../services/auth_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mindpay_frontend/services/notification_service.dart';
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override
@@ -18,6 +20,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late List<MindTransaction> _history;
   late List<MindTransaction> _demoQueue;
   final List<MindTransaction> _log = [];
+  final AuthService _authService = AuthService();
   int _skippedCount = 0;
   double _skippedAmount = 0;
 
@@ -34,19 +37,35 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _load() async {
-    final profile = await UserPreferencesService.getProfile();
-    _userName = profile['name'] ?? '';
-    _userEmail = profile['email'] ?? '';
-    _monthlyBudget = (profile['monthlyBudget'] ?? 0).toDouble();
-    _dailyLimit = (profile['dailyLimit'] ?? 0).toDouble();
-
+    final profile = await _authService.getUserProfile();
+    _userName = profile?['name'] ?? '';
+_userEmail = profile?['email'] ?? '';
+_monthlyBudget = (profile?['monthlyBudget'] ?? 0).toDouble();
+_dailyLimit = (profile?['dailyLimit'] ?? 0).toDouble();
     _history = MockDataService.generateHistory(
       personaName: _userName.isNotEmpty ? _userName : 'You',
       monthlyIncome: _monthlyBudget > 0 ? _monthlyBudget : 40000,
     );
     _demoQueue =
         MockDataService.demoQueue(_monthlyBudget > 0 ? _monthlyBudget : 40000);
+final snapshot = await _authService.getTransactions();
 
+for (var doc in snapshot.docs) {
+  final data = doc.data() as Map<String, dynamic>;
+
+  _log.add(
+   MindTransaction(
+  id: doc.id,
+  userId: _authService.getCurrentUser()!.uid,
+  merchant: data['merchant'] ?? '',
+  category: data['category'] ?? '',
+  amount: (data['amount'] ?? 0).toDouble(),
+  time: DateTime.now(),
+)
+      ..wasPaused = data['paused'] ?? false
+      ..wasCancelled = data['cancelled'] ?? false,
+  );
+}
     setState(() => _loaded = true);
   }
 
@@ -58,7 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _logout() async {
-    await UserPreferencesService.logout();
+    await _authService.signOut();
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(context,
         MaterialPageRoute(builder: (_) => const WelcomeScreen()), (r) => false);
@@ -173,64 +192,95 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _onUpiNotificationReceived() {
-    if (_demoQueue.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('No more demo transactions queued for now')),
-      );
-      return;
-    }
-    final tx = _demoQueue.removeAt(0);
-    final decision = ScoringEngine.checkTransaction(
-      candidate: tx,
-      history: _history,
-      dailyLimit: _dailyLimit,
+Future<void> _onUpiNotificationReceived() async {
+  if (_demoQueue.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('No more demo transactions queued for now'),
+      ),
     );
-
-    if (decision.shouldPause) {
-      tx.wasPaused = true;
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => PauseDialog(
-          transaction: tx,
-          reasons: decision.reasons,
-          onResolved: (continued, reasonTag) {
-            Navigator.of(context).pop();
-            tx.wasCancelled = !continued;
-            tx.reasonTag = reasonTag;
-            setState(() {
-              _log.insert(0, tx);
-              _history.add(tx);
-              if (!continued) {
-                _skippedCount++;
-                _skippedAmount += tx.amount;
-              }
-            });
-            if (!continued) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                backgroundColor: MindColors.rewardSage,
-                content: Text(
-                    'Nice — you just skipped an impulsive ₹${tx.amount.toStringAsFixed(0)} spend'),
-              ));
-            }
-          },
-        ),
-      );
-    } else {
-      setState(() {
-        _log.insert(0, tx);
-        _history.add(tx);
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(
-                'UPI Payment detected: ₹${tx.amount.toStringAsFixed(0)} to ${tx.merchant}')),
-      );
-    }
+    return;
   }
 
+  final tx = _demoQueue.removeAt(0);
+
+  final decision = ScoringEngine.checkTransaction(
+    candidate: tx,
+    history: _history,
+    dailyLimit: _dailyLimit,
+  );
+
+  if (decision.shouldPause) {
+    tx.wasPaused = true;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => PauseDialog(
+        transaction: tx,
+        reasons: decision.reasons,
+        onResolved: (continued, reasonTag) async {
+          Navigator.of(context).pop();
+
+          tx.wasCancelled = !continued;
+          tx.reasonTag = reasonTag;
+
+          setState(() {
+            _log.insert(0, tx);
+            _history.add(tx);
+
+            if (!continued) {
+              _skippedCount++;
+              _skippedAmount += tx.amount;
+            }
+          });
+
+          await _authService.saveTransaction({
+            'merchant': tx.merchant,
+            'amount': tx.amount,
+            'category': tx.category,
+            'date': FieldValue.serverTimestamp(),
+            'paused': true,
+            'cancelled': !continued,
+          });
+
+          if (!continued) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                backgroundColor: MindColors.rewardSage,
+                content: Text(
+                  'Nice — you just skipped an impulsive ₹${tx.amount.toStringAsFixed(0)} spend',
+                ),
+              ),
+            );
+          }
+        },
+      ),
+    );
+  } else {
+    setState(() {
+      _log.insert(0, tx);
+      _history.add(tx);
+    });
+
+    await _authService.saveTransaction({
+      'merchant': tx.merchant,
+      'amount': tx.amount,
+      'category': tx.category,
+      'date': FieldValue.serverTimestamp(),
+      'paused': false,
+      'cancelled': false,
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'UPI Payment detected: ₹${tx.amount.toStringAsFixed(0)} to ${tx.merchant}',
+        ),
+      ),
+    );
+  }
+}
   @override
   Widget build(BuildContext context) {
     if (!_loaded) {
@@ -240,6 +290,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     return Scaffold(
       body: SafeArea(
+        child: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -443,7 +494,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 20),
               ElevatedButton.icon(
-                onPressed: _onUpiNotificationReceived,
+               onPressed: () async {
+    await NotificationService.showFakeUpiNotification(
+      merchant: "Zomato",
+      amount: 250,
+    );
+
+    await Future.delayed(const Duration(seconds: 1));
+
+    await _onUpiNotificationReceived();
+  },
                 icon: const Icon(Icons.notifications_active_outlined),
                 label: const Text("Waiting for UPI Payment"),
                 style: ElevatedButton.styleFrom(
@@ -501,7 +561,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
-              Expanded(
+              SizedBox(
+               height: 300,
                 child: _log.isEmpty
                     ? // MODIFIED: richer empty state for recent activity
                     Center(
@@ -540,7 +601,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
+      ),
     );
+    
   }
 }
 

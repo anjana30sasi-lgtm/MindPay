@@ -68,6 +68,61 @@ class AuthService {
     return _auth.currentUser;
   }
 
+Future<Map<String, dynamic>?> getUserProfile() async {
+  try {
+    final user = _auth.currentUser;
+
+    if (user == null) return null;
+
+    final doc =
+        await _firestore.collection('users').doc(user.uid).get();
+
+    if (doc.exists) {
+      return doc.data();
+    }
+
+    return null;
+  } catch (e) {
+    print(e);
+    return null;
+  }
+}
+Future<void> saveTransaction(Map<String, dynamic> transaction) async {
+  try {
+    final user = _auth.currentUser;
+
+    if (user == null) {
+      print("No logged in user");
+      return;
+    }
+
+    print("Saving transaction...");
+    print(transaction);
+
+    await _firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('transactions')
+        .add(transaction);
+
+    print("Transaction saved successfully");
+  } catch (e) {
+    print("Firestore Error: $e");
+  }
+}
+
+Future<QuerySnapshot> getTransactions() async {
+  final user = _auth.currentUser;
+
+  return await _firestore
+      .collection('users')
+      .doc(user!.uid)
+      .collection('transactions')
+      .orderBy('date', descending: true)
+      .get();
+
+}
+
   // Listen for Authentication Changes
   Stream<User?> authStateChanges() {
     return _auth.authStateChanges();

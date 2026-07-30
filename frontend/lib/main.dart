@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'firebase_options.dart';
 import 'theme.dart';
 import 'screens/home_screen.dart';
+import 'screens/register_screen.dart';
+import 'services/notification_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
   options: DefaultFirebaseOptions.currentPlatform,
 );
+await NotificationService.initialize();
 
   runApp(const MindPayApp());
 }
@@ -21,7 +24,7 @@ class MindPayApp extends StatelessWidget {
       title: 'MindPay',
       debugShowCheckedModeBanner: false,
       theme: MindTheme.theme,
-      home: const HomeScreen(),
+    home: const HomeScreen(),
     );
   }
 }

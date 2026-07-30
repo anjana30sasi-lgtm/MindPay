@@ -35,12 +35,13 @@ class MockDataService {
         final hour = 9 + _rand.nextInt(12); // normal daytime hours
 
         history.add(MindTransaction(
-          id: 'tx_${day}_$t',
-          merchant: merchant,
-          category: category,
-          amount: amount,
-          time: DateTime(date.year, date.month, date.day, hour, _rand.nextInt(60)),
-        ));
+  id: 'tx_${day}_$t',
+  userId: 'demo_user',
+  merchant: merchant,
+  category: category,
+  amount: amount,
+  time: DateTime(date.year, date.month, date.day, hour, _rand.nextInt(60)),
+));
       }
     }
     return history;
@@ -55,6 +56,7 @@ class MockDataService {
       // Normal — should NOT pause
       MindTransaction(
         id: 'demo_1',
+        userId: 'demo_user',
         merchant: 'BigBasket',
         category: 'Groceries',
         amount: (baseSpend * 0.8).roundToDouble(),
@@ -63,6 +65,7 @@ class MockDataService {
       // 3rd food order today — frequency trigger
       MindTransaction(
         id: 'demo_2',
+        userId: 'demo_user',
         merchant: 'Zomato',
         category: 'Food',
         amount: (baseSpend * 0.5).roundToDouble(),
@@ -71,6 +74,7 @@ class MockDataService {
       // Late night + high amount — time + amount trigger
       MindTransaction(
         id: 'demo_3',
+        userId: 'demo_user',
         merchant: 'Myntra',
         category: 'Shopping',
         amount: (baseSpend * 3.2).roundToDouble(),
