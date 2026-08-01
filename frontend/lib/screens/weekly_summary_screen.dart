@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../models/transaction.dart';
 
-
 /// The "familiar" feature — like Jupiter/Fi/Walnut's end-of-week breakdown.
 /// This isn't the unique pitch, but it makes the app feel complete.
 class WeeklySummaryScreen extends StatelessWidget {

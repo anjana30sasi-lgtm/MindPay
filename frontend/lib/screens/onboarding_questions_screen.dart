@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../services/user_preferences_service.dart';
 import 'tutorial_screen.dart';
+import '../services/auth_service.dart';
+import 'home_screen.dart';
 
 /// First-time-only questions that feed personalization. This is the direct
 /// answer to the "cold start" mentor question — the app isn't guessing
@@ -13,6 +15,7 @@ class OnboardingQuestionsScreen extends StatefulWidget {
 }
 
 class _OnboardingQuestionsScreenState extends State<OnboardingQuestionsScreen> {
+  final AuthService _authService = AuthService();
   final PageController _pageController = PageController();
   int _step = 0;
 
@@ -39,15 +42,31 @@ class _OnboardingQuestionsScreenState extends State<OnboardingQuestionsScreen> {
     }
   }
 
-  Future<void> _finish() async {
-    await UserPreferencesService.saveOnboarding(
-      incomeRange: _incomeRange!,
-      spendingStyle: _spendingStyle!,
-      mainTemptation: _mainTemptation!,
-    );
-    if (!mounted) return;
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const TutorialScreen()));
-  }
+ Future<void> _finish() async {
+  // Keep local storage for now
+  await UserPreferencesService.saveOnboarding(
+    incomeRange: _incomeRange!,
+    spendingStyle: _spendingStyle!,
+    mainTemptation: _mainTemptation!,
+  );
+
+  // Save to Firestore
+  await _authService.updateUserProfile({
+    "incomeRange": _incomeRange!,
+    "spendingStyle": _spendingStyle!,
+    "mainTemptation": _mainTemptation!,
+    "onboarded": true,
+  });
+
+  if (!mounted) return;
+
+  Navigator.pushReplacement(
+    context,
+    MaterialPageRoute(
+      builder: (_) => const TutorialScreen(),
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {

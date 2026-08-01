@@ -26,12 +26,18 @@ class AuthService {
 
       if (user != null) {
         await _firestore.collection('users').doc(user.uid).set({
-          'name': name,
-          'email': email,
-          'monthlyBudget': monthlyBudget,
-          'dailyLimit': dailyLimit,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+  'name': name,
+  'email': email,
+  'monthlyBudget': monthlyBudget,
+  'dailyLimit': dailyLimit,
+
+  'incomeRange': '',
+  'spendingStyle': '',
+  'mainTemptation': '',
+  'onboarded': false,
+
+  'createdAt': FieldValue.serverTimestamp(),
+});
       }
 
       return user;
@@ -101,6 +107,25 @@ class AuthService {
       return null;
     }
   }
+  // ==========================
+// UPDATE USER PROFILE
+// ==========================
+Future<void> updateUserProfile(
+    Map<String, dynamic> data,
+) async {
+  try {
+    final user = _auth.currentUser;
+
+    if (user == null) return;
+
+    await _firestore
+        .collection('users')
+        .doc(user.uid)
+        .update(data);
+  } catch (e) {
+    print("Update Profile Error: $e");
+  }
+}
 
   // ==========================
   // SAVE TRANSACTION
@@ -150,6 +175,25 @@ class AuthService {
       return null;
     }
   }
+  Future<void> updateMonthlyBudget(double budget) async {
+  final user = _auth.currentUser;
+
+  if (user == null) return;
+
+  await _firestore.collection('users').doc(user.uid).update({
+    'monthlyBudget': budget,
+  });
+}
+
+Future<void> updateDailyLimit(double limit) async {
+  final user = _auth.currentUser;
+
+  if (user == null) return;
+
+  await _firestore.collection('users').doc(user.uid).update({
+    'dailyLimit': limit,
+  });
+}
 
   // ==========================
   // AUTH STATE

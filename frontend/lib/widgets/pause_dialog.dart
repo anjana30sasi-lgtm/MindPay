@@ -28,17 +28,26 @@ class _PauseDialogState extends State<PauseDialog> {
   bool _decided = false;
 
   @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (_secondsLeft <= 1) {
-        t.cancel();
-        if (!_decided) _resolve(true, null); // auto-continue if ignored
-      } else {
-        setState(() => _secondsLeft--);
-      }
+  @override
+void initState() {
+  super.initState();
+
+  _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+    if (!mounted) return;
+
+    setState(() {
+      _secondsLeft--;
     });
-  }
+
+    if (_secondsLeft == 0) {
+      t.cancel();
+
+      if (!_decided) {
+        _resolve(true, null); // Auto continue after 10 seconds
+      }
+    }
+  });
+}
 
   @override
   void dispose() {
@@ -47,11 +56,15 @@ class _PauseDialogState extends State<PauseDialog> {
   }
 
   void _resolve(bool continued, String? reasonTag) {
-    if (_decided) return;
-    _decided = true;
-    _timer?.cancel();
-    widget.onResolved(continued, reasonTag);
-  }
+  if (_decided) return;
+
+  _decided = true;
+  _timer?.cancel();
+
+  Navigator.of(context).pop(); // Close dialog immediately
+
+  widget.onResolved(continued, reasonTag);
+}
 
   @override
   Widget build(BuildContext context) {
@@ -115,8 +128,8 @@ class _PauseDialogState extends State<PauseDialog> {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12)),
                     ),
-                    onPressed: () => _showReasonSheet(context, continued: true),
-                    child: const Text('Continue'),
+                    onPressed: () => _resolve(true, null),
+                    child: const Text('Continue Payment'),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -149,16 +162,21 @@ class _PauseDialogState extends State<PauseDialog> {
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) {
-        const tags = ['Bored', 'Needed it', 'Social', 'Planned'];
+        const tags = [
+  'Too expensive',
+  'Impulse purchase',
+  'Can wait',
+  'Didnt need it',
+];;
         return Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Quick — why this one?',
+              Text('What made you reconsider?',
                   style: Theme.of(context).textTheme.headlineMedium),
               const SizedBox(height: 4),
-              Text('Helps MindPay learn your patterns',
+              Text('Your feedback helps MindPay reduce future impulse spending.',
                   style: Theme.of(context).textTheme.bodyMedium),
               const SizedBox(height: 16),
               Wrap(

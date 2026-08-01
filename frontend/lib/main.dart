@@ -1,22 +1,21 @@
 import 'package:flutter/material.dart';
+
+import 'theme.dart';
+import 'screens/home_screen.dart';
+import 'screens/welcome_screen.dart';
+import 'screens/onboarding_questions_screen.dart';
+import 'services/user_preferences_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
 import 'firebase_options.dart';
-import 'theme.dart';
-import 'services/notification_service.dart';
+import 'services/user_preferences_service.dart';
 
-import 'screens/home_screen.dart';
-import 'screens/login_screen.dart';
-
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-
-  await NotificationService.initialize();
 
   runApp(const MindPayApp());
 }
@@ -27,38 +26,49 @@ class MindPayApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
       title: 'MindPay',
+      debugShowCheckedModeBanner: false,
       theme: MindTheme.theme,
-      home: const AuthGate(),
+      home: const StartupRouter(),
     );
   }
 }
 
-class AuthGate extends StatelessWidget {
-  const AuthGate({super.key});
+class StartupRouter extends StatelessWidget {
+  const StartupRouter({super.key});
+
+  Future<Widget> _getStartScreen() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final onboarded = await UserPreferencesService.hasOnboarded();
+
+    if (user == null) {
+  return const WelcomeScreen();
+}
+
+    if (!onboarded) {
+      return const OnboardingQuestionsScreen();
+    }
+
+    return const HomeScreen();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
+    return FutureBuilder<Widget>(
+      future: _getStartScreen(),
       builder: (context, snapshot) {
-        // Loading
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (!snapshot.hasData) {
           return const Scaffold(
+            backgroundColor: MindColors.forest,
             body: Center(
-              child: CircularProgressIndicator(),
+              child: CircularProgressIndicator(
+                color: MindColors.pauseAmber,
+              ),
             ),
           );
         }
 
-        // User already logged in
-        if (snapshot.hasData) {
-          return const HomeScreen();
-        }
-
-        // No user logged in
-        return const LoginScreen();
+        return snapshot.data!;
       },
     );
   }

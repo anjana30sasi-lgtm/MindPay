@@ -6,10 +6,10 @@ import '../services/scoring_engine.dart';
 import '../services/user_preferences_service.dart';
 import '../widgets/pause_dialog.dart';
 import 'weekly_summary_screen.dart';
+import 'profile_screen.dart';
 import 'welcome_screen.dart';
 import '../services/auth_service.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:mindpay_frontend/services/notification_service.dart';
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override
@@ -17,10 +17,10 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final AuthService _authService = AuthService();
   late List<MindTransaction> _history;
   late List<MindTransaction> _demoQueue;
   final List<MindTransaction> _log = [];
-  final AuthService _authService = AuthService();
   int _skippedCount = 0;
   double _skippedAmount = 0;
 
@@ -28,6 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _userEmail = '';
   double _monthlyBudget = 0;
   double _dailyLimit = 0;
+  double _todaySpent = 0;
   bool _loaded = false;
 
   @override
@@ -36,13 +37,17 @@ class _HomeScreenState extends State<HomeScreen> {
     _load();
   }
 
- Future<void> _load() async {
+  Future<void> _load() async {
   final profile = await _authService.getUserProfile();
 
-  _userName = profile?['name'] ?? '';
-  _userEmail = profile?['email'] ?? '';
-  _monthlyBudget = (profile?['monthlyBudget'] ?? 0).toDouble();
-  _dailyLimit = (profile?['dailyLimit'] ?? 0).toDouble();
+  if (profile != null) {
+    _userName = profile['name'] ?? '';
+    _userEmail = profile['email'] ?? '';
+    _monthlyBudget =
+        (profile['monthlyBudget'] ?? 0).toDouble();
+    _dailyLimit =
+        (profile['dailyLimit'] ?? 0).toDouble();
+  }
 
   _history = MockDataService.generateHistory(
     personaName: _userName.isNotEmpty ? _userName : 'You',
@@ -52,27 +57,6 @@ class _HomeScreenState extends State<HomeScreen> {
   _demoQueue = MockDataService.demoQueue(
     _monthlyBudget > 0 ? _monthlyBudget : 40000,
   );
-
-  final snapshot = await _authService.getTransactions();
-
-  if (snapshot != null) {
-    for (var doc in snapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
-
-      _log.add(
-        MindTransaction(
-          id: doc.id,
-          userId: _authService.getCurrentUser()?.uid ?? "",
-          merchant: data['merchant'] ?? '',
-          category: data['category'] ?? '',
-          amount: (data['amount'] ?? 0).toDouble(),
-          time: (data['date'] as Timestamp?)?.toDate() ?? DateTime.now(),
-          wasPaused: data['paused'] ?? false,
-          wasCancelled: data['cancelled'] ?? false,
-        ),
-      );
-    }
-  }
 
   setState(() {
     _loaded = true;
@@ -202,95 +186,63 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-Future<void> _onUpiNotificationReceived() async {
-  if (_demoQueue.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('No more demo transactions queued for now'),
-      ),
+  void _onUpiNotificationReceived() {
+    if (_demoQueue.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('No more demo transactions queued for now')),
+      );
+      return;
+    }
+    final tx = _demoQueue.removeAt(0);
+    final decision = ScoringEngine.checkTransaction(
+      candidate: tx,
+      history: _history,
+      dailyLimit: _dailyLimit,
     );
-    return;
-  }
 
-  final tx = _demoQueue.removeAt(0);
-
-  final decision = ScoringEngine.checkTransaction(
-    candidate: tx,
-    history: _history,
-    dailyLimit: _dailyLimit,
-  );
-
-  if (decision.shouldPause) {
-    tx.wasPaused = true;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => PauseDialog(
-        transaction: tx,
-        reasons: decision.reasons,
-        onResolved: (continued, reasonTag) async {
-          Navigator.of(context).pop();
-
-          tx.wasCancelled = !continued;
-          tx.reasonTag = reasonTag;
-
-          setState(() {
-            _log.insert(0, tx);
-            _history.add(tx);
-
+    if (decision.shouldPause) {
+      tx.wasPaused = true;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => PauseDialog(
+          transaction: tx,
+          reasons: decision.reasons,
+          onResolved: (continued, reasonTag) {
+            tx.wasCancelled = !continued;
+            tx.reasonTag = reasonTag;
+            setState(() {
+              _log.insert(0, tx);
+              _history.add(tx);
+              if (!continued) {
+                _skippedCount++;
+                _skippedAmount += tx.amount;
+              }
+            });
             if (!continued) {
-              _skippedCount++;
-              _skippedAmount += tx.amount;
-            }
-          });
-
-          await _authService.saveTransaction({
-            'merchant': tx.merchant,
-            'amount': tx.amount,
-            'category': tx.category,
-            'date': FieldValue.serverTimestamp(),
-            'paused': true,
-            'cancelled': !continued,
-          });
-
-          if (!continued) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                 backgroundColor: MindColors.rewardSage,
                 content: Text(
-                  'Nice — you just skipped an impulsive ₹${tx.amount.toStringAsFixed(0)} spend',
-                ),
-              ),
-            );
-          }
-        },
-      ),
-    );
-  } else {
-    setState(() {
-      _log.insert(0, tx);
-      _history.add(tx);
-    });
-
-    await _authService.saveTransaction({
-      'merchant': tx.merchant,
-      'amount': tx.amount,
-      'category': tx.category,
-      'date': FieldValue.serverTimestamp(),
-      'paused': false,
-      'cancelled': false,
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'UPI Payment detected: ₹${tx.amount.toStringAsFixed(0)} to ${tx.merchant}',
+                    'Nice — you just skipped an impulsive ₹${tx.amount.toStringAsFixed(0)} spend'),
+              ));
+            }
+          },
         ),
-      ),
-    );
+      );
+    } else {
+      setState(() {
+        _log.insert(0, tx);
+        _history.add(tx);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(
+                'UPI Payment detected: ₹${tx.amount.toStringAsFixed(0)} to ${tx.merchant}')),
+      );
+    }
   }
-}
+
   @override
   Widget build(BuildContext context) {
     if (!_loaded) {
@@ -300,7 +252,6 @@ Future<void> _onUpiNotificationReceived() async {
     }
     return Scaffold(
       body: SafeArea(
-        child: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -315,7 +266,14 @@ Future<void> _onUpiNotificationReceived() async {
                   Row(
                     children: [
                       GestureDetector(
-                        onTap: _showProfileSheet,
+                        onTap: () {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => const ProfileScreen(),
+    ),
+  );
+},
                         child: Container(
                           width: 40,
                           height: 40,
@@ -435,16 +393,16 @@ Future<void> _onUpiNotificationReceived() async {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '₹1200 / ₹${(_dailyLimit > 0 ? _dailyLimit : 5000).toStringAsFixed(0)}',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyLarge
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
+  '₹${_todaySpent.toStringAsFixed(0)} / ₹${(_dailyLimit > 0 ? _dailyLimit : 5000).toStringAsFixed(0)}',
+  style: Theme.of(context)
+      .textTheme
+      .bodyLarge
+      ?.copyWith(fontWeight: FontWeight.w700),
+),
                     const SizedBox(height: 8),
                     LinearProgressIndicator(
                       value: ((_dailyLimit > 0 ? _dailyLimit : 5000) > 0)
-                          ? (1200 / (_dailyLimit > 0 ? _dailyLimit : 5000))
+                          ? (_todaySpent / (_dailyLimit > 0 ? _dailyLimit : 5000))
                               .clamp(0.0, 1.0)
                           : 0.0,
                       backgroundColor: MindColors.divider,
@@ -504,16 +462,7 @@ Future<void> _onUpiNotificationReceived() async {
 
               const SizedBox(height: 20),
               ElevatedButton.icon(
-               onPressed: () async {
-    await NotificationService.showFakeUpiNotification(
-      merchant: "Zomato",
-      amount: 250,
-    );
-
-    await Future.delayed(const Duration(seconds: 1));
-
-    await _onUpiNotificationReceived();
-  },
+                onPressed: _onUpiNotificationReceived,
                 icon: const Icon(Icons.notifications_active_outlined),
                 label: const Text("Waiting for UPI Payment"),
                 style: ElevatedButton.styleFrom(
@@ -571,8 +520,7 @@ Future<void> _onUpiNotificationReceived() async {
                   ),
                 ],
               ),
-              SizedBox(
-               height: 300,
+              Expanded(
                 child: _log.isEmpty
                     ? // MODIFIED: richer empty state for recent activity
                     Center(
@@ -611,9 +559,7 @@ Future<void> _onUpiNotificationReceived() async {
           ),
         ),
       ),
-      ),
     );
-    
   }
 }
 

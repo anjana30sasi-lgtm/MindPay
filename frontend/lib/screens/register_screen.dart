@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../services/auth_service.dart';
+
 import '../theme.dart';
 import '../widgets/mindpay_logo.dart';
-import '../services/user_preferences_service.dart';
 import 'onboarding_questions_screen.dart';
+import '../services/auth_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -13,13 +13,14 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
+  final AuthService _authService = AuthService();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _monthlyBudgetController = TextEditingController();
   final _dailyLimitController = TextEditingController();
-  final AuthService _authService = AuthService();
+
   bool _hidePassword = true;
   bool _hideConfirm = true;
 
@@ -61,7 +62,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     // Temporary local login.
     // Later replace with your teammate's backend API.
 
-    
     final user = await _authService.signUp(
   name: _nameController.text.trim(),
   email: _emailController.text.trim(),
@@ -73,19 +73,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
 );
 
 if (user == null) {
+  if (!mounted) return;
+
   ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text("Registration failed")),
+    const SnackBar(
+      content: Text("Registration failed"),
+    ),
   );
+
   return;
 }
-    if (!mounted) return;
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const OnboardingQuestionsScreen(),
-      ),
-    );
+if (!mounted) return;
+
+Navigator.pushReplacement(
+  context,
+  MaterialPageRoute(
+    builder: (_) => const OnboardingQuestionsScreen(),
+  ),
+);
   }
 
   @override

@@ -133,7 +133,19 @@ class UserPreferencesService {
     await prefs.remove(_keySpendingStyle);
     await prefs.remove(_keyTemptation);
   }
+  // ------------------------------
+// Update Budget
+// ------------------------------
 
+static Future<void> updateMonthlyBudget(double budget) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setDouble(_keyMonthlyBudget, budget);
+}
+
+static Future<void> updateDailyLimit(double limit) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setDouble(_keyDailyLimit, limit);
+}
   static Future<void> clearAll() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();

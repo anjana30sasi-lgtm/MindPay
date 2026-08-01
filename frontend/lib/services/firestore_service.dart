@@ -5,9 +5,17 @@ class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // Add a transaction
-  Future<void> addTransaction(MindTransaction transaction) async {
-    await _firestore.collection('transactions').doc(transaction.id).set({
-      'userId': transaction.userId,
+  Future<void> addTransaction(
+    String userId,
+    MindTransaction transaction,
+) async {
+  await _firestore
+      .collection('users')
+      .doc(userId)
+      .collection('transactions')
+      .doc(transaction.id)
+      .set({
+      //'userId': transaction.userId,
       'merchant': transaction.merchant,
       'category': transaction.category,
       'amount': transaction.amount,
@@ -21,17 +29,18 @@ class FirestoreService {
   // Get all transactions of a user
   Future<List<MindTransaction>> getTransactions(String userId) async {
     QuerySnapshot snapshot = await _firestore
-        .collection('transactions')
-        .where('userId', isEqualTo: userId)
-        .orderBy('time', descending: true)
-        .get();
+    .collection('users')
+    .doc(userId)
+    .collection('transactions')
+    .orderBy('time', descending: true)
+    .get();
 
     return snapshot.docs.map((doc) {
       final data = doc.data() as Map<String, dynamic>;
 
       return MindTransaction(
         id: doc.id,
-        userId: data['userId'],
+       // userId: data['userId'],
         merchant: data['merchant'],
         category: data['category'],
         amount: (data['amount'] as num).toDouble(),
@@ -77,12 +86,17 @@ class FirestoreService {
   }
 
   // Delete a transaction
-  Future<void> deleteTransaction(String transactionId) async {
-    await _firestore
-        .collection('transactions')
-        .doc(transactionId)
-        .delete();
-  }
+  Future<void> deleteTransaction(
+    String userId,
+    String transactionId,
+) async {
+  await _firestore
+      .collection('users')
+      .doc(userId)
+      .collection('transactions')
+      .doc(transactionId)
+      .delete();
+}
 
   // Delete an alert
   Future<void> deleteAlert(String alertId) async {
