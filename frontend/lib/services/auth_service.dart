@@ -5,7 +5,9 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Sign Up
+  // ==========================
+  // SIGN UP
+  // ==========================
   Future<User?> signUp({
     required String name,
     required String email,
@@ -34,12 +36,14 @@ class AuthService {
 
       return user;
     } catch (e) {
-      print(e);
+      print("Signup Error: $e");
       return null;
     }
   }
 
-  // Sign In
+  // ==========================
+  // LOGIN
+  // ==========================
   Future<User?> signIn({
     required String email,
     required String password,
@@ -53,77 +57,103 @@ class AuthService {
 
       return userCredential.user;
     } catch (e) {
-      print(e);
+      print("Login Error: $e");
       return null;
     }
   }
 
-  // Sign Out
+  // ==========================
+  // SIGN OUT
+  // ==========================
   Future<void> signOut() async {
     await _auth.signOut();
   }
 
-  // Get Current User
+  // ==========================
+  // CURRENT USER
+  // ==========================
   User? getCurrentUser() {
     return _auth.currentUser;
   }
 
-Future<Map<String, dynamic>?> getUserProfile() async {
-  try {
-    final user = _auth.currentUser;
+  // ==========================
+  // USER PROFILE
+  // ==========================
+  Future<Map<String, dynamic>?> getUserProfile() async {
+    try {
+      final user = _auth.currentUser;
 
-    if (user == null) return null;
+      if (user == null) {
+        print("No logged in user");
+        return null;
+      }
 
-    final doc =
-        await _firestore.collection('users').doc(user.uid).get();
+      final doc =
+          await _firestore.collection('users').doc(user.uid).get();
 
-    if (doc.exists) {
-      return doc.data();
+      if (doc.exists) {
+        return doc.data();
+      }
+
+      return null;
+    } catch (e) {
+      print("Profile Error: $e");
+      return null;
     }
-
-    return null;
-  } catch (e) {
-    print(e);
-    return null;
   }
-}
-Future<void> saveTransaction(Map<String, dynamic> transaction) async {
-  try {
-    final user = _auth.currentUser;
 
-    if (user == null) {
-      print("No logged in user");
-      return;
+  // ==========================
+  // SAVE TRANSACTION
+  // ==========================
+  Future<void> saveTransaction(
+      Map<String, dynamic> transaction) async {
+    try {
+      final user = _auth.currentUser;
+
+      if (user == null) {
+        print("No logged in user");
+        return;
+      }
+
+      await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('transactions')
+          .add(transaction);
+
+      print("Transaction saved successfully");
+    } catch (e) {
+      print("Firestore Error: $e");
     }
-
-    print("Saving transaction...");
-    print(transaction);
-
-    await _firestore
-        .collection('users')
-        .doc(user.uid)
-        .collection('transactions')
-        .add(transaction);
-
-    print("Transaction saved successfully");
-  } catch (e) {
-    print("Firestore Error: $e");
   }
-}
 
-Future<QuerySnapshot> getTransactions() async {
-  final user = _auth.currentUser;
+  // ==========================
+  // GET TRANSACTIONS
+  // ==========================
+  Future<QuerySnapshot?> getTransactions() async {
+    try {
+      final user = _auth.currentUser;
 
-  return await _firestore
-      .collection('users')
-      .doc(user!.uid)
-      .collection('transactions')
-      .orderBy('date', descending: true)
-      .get();
+      if (user == null) {
+        print("No logged in user");
+        return null;
+      }
 
-}
+      return await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('transactions')
+          .orderBy('date', descending: true)
+          .get();
+    } catch (e) {
+      print("Get Transactions Error: $e");
+      return null;
+    }
+  }
 
-  // Listen for Authentication Changes
+  // ==========================
+  // AUTH STATE
+  // ==========================
   Stream<User?> authStateChanges() {
     return _auth.authStateChanges();
   }

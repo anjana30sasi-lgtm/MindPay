@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../theme.dart';
 import '../widgets/mindpay_logo.dart';
-import '../services/user_preferences_service.dart';
-import 'onboarding_questions_screen.dart';
+import '../services/auth_service.dart';
+import 'home_screen.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -17,7 +17,10 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
+  final AuthService _authService = AuthService();
+
   bool _obscurePassword = true;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -27,8 +30,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
-    if (_emailController.text.isEmpty ||
-        _passwordController.text.isEmpty) {
+    if (_emailController.text.trim().isEmpty ||
+        _passwordController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Please enter email and password"),
@@ -37,25 +40,35 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    // TEMPORARY LOGIN
-    // Later replace this with your teammate's backend API.
+    setState(() {
+      _isLoading = true;
+    });
 
-    await UserPreferencesService.login(
-  userId: "",
-  name: "MindPay User",
-  email: _emailController.text.trim(),
-  monthlyBudget: 0,
-  dailyLimit: 0,
-);
+    final user = await _authService.signIn(
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+    );
 
     if (!mounted) return;
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const OnboardingQuestionsScreen(),
-      ),
-    );
+    setState(() {
+      _isLoading = false;
+    });
+
+    if (user != null) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const HomeScreen(),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Invalid email or password"),
+        ),
+      );
+    }
   }
 
   @override
@@ -130,6 +143,7 @@ class _LoginScreenState extends State<LoginScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
+                  onPressed: _isLoading ? null : _login,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: MindColors.forest,
                     foregroundColor: Colors.white,
@@ -138,13 +152,21 @@ class _LoginScreenState extends State<LoginScreen> {
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  onPressed: _login,
-                  child: const Text(
-                    "Login",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 22,
+                          width: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          "Login",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
 

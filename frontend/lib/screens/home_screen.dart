@@ -36,38 +36,48 @@ class _HomeScreenState extends State<HomeScreen> {
     _load();
   }
 
-  Future<void> _load() async {
-    final profile = await _authService.getUserProfile();
-    _userName = profile?['name'] ?? '';
-_userEmail = profile?['email'] ?? '';
-_monthlyBudget = (profile?['monthlyBudget'] ?? 0).toDouble();
-_dailyLimit = (profile?['dailyLimit'] ?? 0).toDouble();
-    _history = MockDataService.generateHistory(
-      personaName: _userName.isNotEmpty ? _userName : 'You',
-      monthlyIncome: _monthlyBudget > 0 ? _monthlyBudget : 40000,
-    );
-    _demoQueue =
-        MockDataService.demoQueue(_monthlyBudget > 0 ? _monthlyBudget : 40000);
-final snapshot = await _authService.getTransactions();
+ Future<void> _load() async {
+  final profile = await _authService.getUserProfile();
 
-for (var doc in snapshot.docs) {
-  final data = doc.data() as Map<String, dynamic>;
+  _userName = profile?['name'] ?? '';
+  _userEmail = profile?['email'] ?? '';
+  _monthlyBudget = (profile?['monthlyBudget'] ?? 0).toDouble();
+  _dailyLimit = (profile?['dailyLimit'] ?? 0).toDouble();
 
-  _log.add(
-   MindTransaction(
-  id: doc.id,
-  userId: _authService.getCurrentUser()!.uid,
-  merchant: data['merchant'] ?? '',
-  category: data['category'] ?? '',
-  amount: (data['amount'] ?? 0).toDouble(),
-  time: DateTime.now(),
-)
-      ..wasPaused = data['paused'] ?? false
-      ..wasCancelled = data['cancelled'] ?? false,
+  _history = MockDataService.generateHistory(
+    personaName: _userName.isNotEmpty ? _userName : 'You',
+    monthlyIncome: _monthlyBudget > 0 ? _monthlyBudget : 40000,
   );
-}
-    setState(() => _loaded = true);
+
+  _demoQueue = MockDataService.demoQueue(
+    _monthlyBudget > 0 ? _monthlyBudget : 40000,
+  );
+
+  final snapshot = await _authService.getTransactions();
+
+  if (snapshot != null) {
+    for (var doc in snapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+
+      _log.add(
+        MindTransaction(
+          id: doc.id,
+          userId: _authService.getCurrentUser()?.uid ?? "",
+          merchant: data['merchant'] ?? '',
+          category: data['category'] ?? '',
+          amount: (data['amount'] ?? 0).toDouble(),
+          time: (data['date'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          wasPaused: data['paused'] ?? false,
+          wasCancelled: data['cancelled'] ?? false,
+        ),
+      );
+    }
   }
+
+  setState(() {
+    _loaded = true;
+  });
+}
 
   Future<void> _replayOnboarding() async {
     await UserPreferencesService.resetOnboarding();
