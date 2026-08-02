@@ -2,7 +2,6 @@ import '../models/transaction.dart';
 
 class NotificationParser {
   MindTransaction? parse({
-    required String userId,
     required String title,
     required String body,
   }) {
@@ -12,19 +11,19 @@ class NotificationParser {
     }
 
     // Extract amount
-    RegExp amountRegex = RegExp(r'₹\s?(\d+(\.\d+)?)');
-    Match? match = amountRegex.firstMatch(body);
+    final RegExp amountRegex = RegExp(r'₹\s?(\d+(\.\d+)?)');
+    final Match? match = amountRegex.firstMatch(body);
 
     if (match == null) {
       return null;
     }
 
-    double amount = double.parse(match.group(1)!);
+    final double amount = double.parse(match.group(1)!);
 
-    // Merchant (simple version)
+    // Merchant
     String merchant = title;
 
-    // Category (basic rules)
+    // Category
     String category = "Others";
 
     if (merchant.toLowerCase().contains("swiggy") ||
@@ -40,7 +39,6 @@ class NotificationParser {
 
     return MindTransaction(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      userId: userId,
       merchant: merchant,
       category: category,
       amount: amount,

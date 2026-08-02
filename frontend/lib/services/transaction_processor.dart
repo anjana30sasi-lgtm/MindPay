@@ -5,15 +5,15 @@ import 'scoring_engine.dart';
 
 class TransactionProcessor {
   final FirestoreService _firestoreService = FirestoreService();
-  final ScoringEngine _scoringEngine = ScoringEngine();
-
+  
   Future<PauseDecision> processTransaction({
+    required String userId,
     required MindTransaction transaction,
     required double dailyLimit,
   }) async {
-    // Get today's transactions
+    // Get today's transactions for this user
     List<MindTransaction> transactions =
-        await _firestoreService.getTransactions(transaction.userId);
+        await _firestoreService.getTransactions(userId);
 
     DateTime now = DateTime.now();
 
@@ -28,7 +28,7 @@ class TransactionProcessor {
       }
     }
 
-    // Count purchases in same category today
+    // Count purchases in the same category today
     int categoryCount = transactions.where((t) {
       return t.category == transaction.category &&
           t.time.year == now.year &&
@@ -37,14 +37,13 @@ class TransactionProcessor {
     }).length;
 
     // Run scoring engine
-    PauseDecision decision = _scoringEngine.analyzeTransaction(
-      transaction: transaction,
-      dailySpent: dailySpent,
-      dailyLimit: dailyLimit,
-      categoryCount: categoryCount,
-    );
-
-    // Update transaction
+ // Run scoring engine
+PauseDecision decision = ScoringEngine.checkTransaction(
+  candidate: transaction,
+  history: transactions,
+  dailyLimit: dailyLimit,
+);
+    // Update transaction status
     transaction.wasPaused = decision.shouldPause;
 
     if (decision.reasons.isNotEmpty) {
@@ -52,12 +51,15 @@ class TransactionProcessor {
     }
 
     // Save transaction
-    await _firestoreService.addTransaction(transaction);
+    await _firestoreService.addTransaction(
+  userId,
+  transaction,
+);
 
     // Create alert if needed
     if (decision.shouldPause) {
       await _firestoreService.addAlert(
-        userId: transaction.userId,
+        userId: userId,
         transactionId: transaction.id,
         message: decision.reasons.join("\n"),
         severity: "High",

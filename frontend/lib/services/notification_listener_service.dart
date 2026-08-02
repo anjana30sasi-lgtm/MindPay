@@ -15,7 +15,6 @@ class NotificationListenerService {
   }) async {
     // Convert notification into a transaction
     MindTransaction? transaction = _parser.parse(
-      userId: userId,
       title: title,
       body: body,
     );
@@ -30,8 +29,9 @@ class NotificationListenerService {
 
     // Process transaction
     await _processor.processTransaction(
-      transaction: transaction,
-      dailyLimit: dailyLimit,
-    );
+  userId: userId,
+  transaction: transaction,
+  dailyLimit: dailyLimit,
+);
   }
 }

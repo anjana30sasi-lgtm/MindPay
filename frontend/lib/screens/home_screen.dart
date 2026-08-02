@@ -212,14 +212,18 @@ class _HomeScreenState extends State<HomeScreen> {
           onResolved: (continued, reasonTag) {
             tx.wasCancelled = !continued;
             tx.reasonTag = reasonTag;
-            setState(() {
-              _log.insert(0, tx);
-              _history.add(tx);
-              if (!continued) {
-                _skippedCount++;
-                _skippedAmount += tx.amount;
-              }
-            });
+           setState(() {
+  _log.insert(0, tx);
+  _history.add(tx);
+
+  // Add to today's spending only if payment continued
+  if (continued) {
+    _todaySpent += tx.amount;
+  } else {
+    _skippedCount++;
+    _skippedAmount += tx.amount;
+  }
+});
             if (!continued) {
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                 backgroundColor: MindColors.rewardSage,
@@ -232,9 +236,11 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     } else {
       setState(() {
-        _log.insert(0, tx);
-        _history.add(tx);
-      });
+  _log.insert(0, tx);
+  _history.add(tx);
+
+  _todaySpent += tx.amount;
+});
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text(
@@ -409,6 +415,65 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: MindColors.forest,
                       minHeight: 8,
                     ),
+                    const SizedBox(height: 12),
+
+Builder(
+  builder: (context) {
+    final dailyLimit = (_dailyLimit > 0 ? _dailyLimit : 5000);
+    final percent = _todaySpent / dailyLimit;
+
+    String title;
+    String message;
+    Color color;
+
+    if (percent < 0.7) {
+      title = "You're doing well";
+      message =
+          "You still have ₹${(dailyLimit - _todaySpent).toStringAsFixed(0)} available today.";
+      color = Colors.green;
+    } else if (percent < 1.0) {
+      title = "Be careful";
+      message =
+          "You've already used ${(percent * 100).toStringAsFixed(0)}% of today's budget.";
+      color = Colors.orange;
+    } else {
+      title = "Daily limit exceeded";
+      message =
+          "You've spent ₹${(_todaySpent - dailyLimit).toStringAsFixed(0)} more than today's budget.";
+      color = Colors.red;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(message),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  },
+),
                   ],
                 ),
               ),
