@@ -1,0 +1,28 @@
+{
+  "model_type": "RandomForestClassifier",
+  "num_samples": 7500,
+  "numerical_features": [
+    "amount",
+    "hour",
+    "day_of_week",
+    "is_weekend",
+    "same_day_category_count",
+    "daily_limit",
+    "monthly_budget",
+    "amount_to_limit_ratio",
+    "spend_ratio_to_category_avg",
+    "is_temptation_category"
+  ],
+  "categorical_features": [
+    "category",
+    "spending_style"
+  ],
+  "metrics": {
+    "accuracy": 0.9227,
+    "roc_auc": 0.9716,
+    "precision_class_1": 0.8368,
+    "recall_class_1": 0.8864,
+    "f1_class_1": 0.8609
+  },
+  "disclaimer": "This model is trained on synthetic behavioral spending data for MindPay demonstration. It is not an empirically validated psychological impulse diagnostic tool."
+}

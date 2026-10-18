@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../models/transaction.dart';
 import '../services/mock_data_service.dart';
-import '../services/scoring_engine.dart';
 import '../services/user_preferences_service.dart';
 import '../widgets/pause_dialog.dart';
 import 'weekly_summary_screen.dart';
 import 'profile_screen.dart';
 import 'welcome_screen.dart';
 import '../services/auth_service.dart';
+import '../services/ml_scoring_service.dart';
+import '../services/firestore_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,6 +20,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final AuthService _authService = AuthService();
+  final FirestoreService _firestoreService = FirestoreService();
+  final MlScoringService _mlScoringService = MlScoringService();
 
   late List<MindTransaction> _history;
   late List<MindTransaction> _demoQueue;
@@ -35,12 +38,21 @@ class _HomeScreenState extends State<HomeScreen> {
   double _dailyLimit = 0;
   double _todaySpent = 0;
 
+  String _spendingStyle = '';
+  String _mainTemptation = '';
+
   bool _loaded = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _mlScoringService.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -55,6 +67,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
       _dailyLimit =
           (profile['dailyLimit'] ?? 0).toDouble();
+
+      _spendingStyle = profile['spendingStyle'] ?? '';
+      _mainTemptation = profile['mainTemptation'] ?? '';
     }
 
     _history = MockDataService.generateHistory(
@@ -64,6 +79,19 @@ class _HomeScreenState extends State<HomeScreen> {
           _monthlyBudget > 0 ? _monthlyBudget : 40000,
     );
 
+    // If authenticated user has saved transactions in Firestore, include them
+    final currentUser = _authService.getCurrentUser();
+    if (currentUser != null) {
+      try {
+        final saved = await _firestoreService.getTransactions(currentUser.uid);
+        if (saved.isNotEmpty) {
+          _history = [...saved, ..._history];
+        }
+      } catch (e) {
+        debugPrint('Could not fetch Firestore transactions: $e');
+      }
+    }
+
     _demoQueue = MockDataService.demoQueue(
       _monthlyBudget > 0 ? _monthlyBudget : 40000,
     );
@@ -71,6 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _loaded = true;
     });
+
   }
 
   Future<void> _replayOnboarding() async {
@@ -255,7 +284,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _onUpiNotificationReceived() {
+  Future<void> _onUpiNotificationReceived() async {
     if (_demoQueue.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -269,14 +298,33 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final tx = _demoQueue.removeAt(0);
 
-    final decision = ScoringEngine.checkTransaction(
+    // Evaluate candidate transaction using ML model with automatic local fallback
+    final decision = await _mlScoringService.evaluateTransaction(
       candidate: tx,
       history: _history,
-      dailyLimit: _dailyLimit,
+      dailyLimit: _dailyLimit > 0 ? _dailyLimit : 5000,
+      monthlyBudget: _monthlyBudget > 0 ? _monthlyBudget : 40000,
+      spendingStyle: _spendingStyle,
+      mainTemptation: _mainTemptation,
+      userId: _authService.getCurrentUser()?.uid,
+    );
+
+    // Decision point debug logging
+    debugPrint(
+      '[MindPay DEBUG] Decision evaluated: merchant="${tx.merchant}", '
+      'amount=₹${tx.amount.toStringAsFixed(0)}, category="${tx.category}", '
+      'shouldPause=${decision.shouldPause}, reasons=${decision.reasons}, '
+      'mounted=$mounted',
     );
 
     if (decision.shouldPause) {
       tx.wasPaused = true;
+
+      debugPrint(
+        '[MindPay DEBUG] REACHED showDialog: merchant="${tx.merchant}", '
+        'amount=₹${tx.amount.toStringAsFixed(0)}, shouldPause=${decision.shouldPause}, '
+        'reasons=${decision.reasons}',
+      );
 
       showDialog(
         context: context,
@@ -284,7 +332,8 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (_) => PauseDialog(
           transaction: tx,
           reasons: decision.reasons,
-          onResolved: (continued, reasonTag) {
+          onResolved: (continued, reasonTag) async {
+
             tx.wasCancelled = !continued;
             tx.reasonTag = reasonTag;
 
@@ -300,7 +349,26 @@ class _HomeScreenState extends State<HomeScreen> {
               }
             });
 
+            // Persist to Firestore once resolved if user is authenticated
+            final currentUser = _authService.getCurrentUser();
+            if (currentUser != null) {
+              try {
+                await _firestoreService.addTransaction(currentUser.uid, tx);
+                if (tx.wasPaused) {
+                  await _firestoreService.addAlert(
+                    userId: currentUser.uid,
+                    transactionId: tx.id,
+                    message: decision.reasons.join("\n"),
+                    severity: "High",
+                  );
+                }
+              } catch (e) {
+                debugPrint('Error saving transaction to Firestore: $e');
+              }
+            }
+
             if (!continued) {
+              if (!mounted) return;
               ScaffoldMessenger.of(context)
                   .showSnackBar(
                 SnackBar(
@@ -317,12 +385,30 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     } else {
+      debugPrint(
+        '[MindPay DEBUG] SKIPPED showDialog (decision.shouldPause is false): '
+        'merchant="${tx.merchant}", amount=₹${tx.amount.toStringAsFixed(0)}, '
+        'reasons=${decision.reasons}',
+      );
+
       setState(() {
         _log.insert(0, tx);
         _history.add(tx);
         _todaySpent += tx.amount;
       });
 
+
+      // Persist to Firestore if user is authenticated
+      final currentUser = _authService.getCurrentUser();
+      if (currentUser != null) {
+        try {
+          await _firestoreService.addTransaction(currentUser.uid, tx);
+        } catch (e) {
+          debugPrint('Error saving transaction to Firestore: $e');
+        }
+      }
+
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -334,6 +420,8 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
   }
+
+
 
   @override
   Widget build(BuildContext context) {

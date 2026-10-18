@@ -1,0 +1,1 @@
+"""MindPay Training Package"""

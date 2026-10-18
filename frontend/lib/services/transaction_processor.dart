@@ -1,48 +1,35 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/transaction.dart';
 import 'firestore_service.dart';
-import 'scoring_engine.dart';
+import 'ml_scoring_service.dart';
 
 class TransactionProcessor {
   final FirestoreService _firestoreService = FirestoreService();
+  final MlScoringService _mlScoringService = MlScoringService();
   
   Future<PauseDecision> processTransaction({
     required String userId,
     required MindTransaction transaction,
     required double dailyLimit,
+    double? monthlyBudget,
+    String? spendingStyle,
+    String? mainTemptation,
   }) async {
-    // Get today's transactions for this user
+    // Get transactions for this user from Firestore
     List<MindTransaction> transactions =
         await _firestoreService.getTransactions(userId);
 
-    DateTime now = DateTime.now();
+    // Run ML scoring engine with automatic rule-based fallback
 
-    // Calculate today's spending
-    double dailySpent = 0;
+    PauseDecision decision = await _mlScoringService.evaluateTransaction(
+      candidate: transaction,
+      history: transactions,
+      dailyLimit: dailyLimit,
+      monthlyBudget: monthlyBudget,
+      spendingStyle: spendingStyle,
+      mainTemptation: mainTemptation,
+      userId: userId,
+    );
 
-    for (var t in transactions) {
-      if (t.time.year == now.year &&
-          t.time.month == now.month &&
-          t.time.day == now.day) {
-        dailySpent += t.amount;
-      }
-    }
-
-    // Count purchases in the same category today
-    int categoryCount = transactions.where((t) {
-      return t.category == transaction.category &&
-          t.time.year == now.year &&
-          t.time.month == now.month &&
-          t.time.day == now.day;
-    }).length;
-
-    // Run scoring engine
- // Run scoring engine
-PauseDecision decision = ScoringEngine.checkTransaction(
-  candidate: transaction,
-  history: transactions,
-  dailyLimit: dailyLimit,
-);
     // Update transaction status
     transaction.wasPaused = decision.shouldPause;
 
